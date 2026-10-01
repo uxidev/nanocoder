@@ -1,5 +1,37 @@
 # @nanocollective/nanocoder
 
+# 1.32.0
+
+- Enhanced `/help` with categorized command listings and command-specific details, including usage, supported options and subcommands, aliases, and examples. Closes #1308.
+- Added `?key=value` inline overrides to slash commands. An override is applied via the existing session-override plumbing and restored to its prior value when the command finishes, so users can test a setting for a single command without changing the session state. Closes #1151.
+
+**Working examples:**
+- `/usage ?context-max=200k` - renders context usage against a 200k limit for this command only, then restores the prior limit.
+- `/compact ?threshold=80` - gates the manual compaction on current usage: compacts normally at or above 80%, otherwise reports the usage and skips (mirroring the automatic path's gate). Composes with `?context-max`, which the gate reads as the limit.
+- `/compact ?preview`, `/compact ?auto-on` - boolean flags forwarded as their `--flag` long forms.
+
+**Behavior:**
+- `threshold` values outside 50–95 and unparseable values are ignored (fail open: the command runs un-gated).
+- `auto-compact` is parsed and round-tripped through the session-override stores (apply then restore), but no built-in slash command currently reads it synchronously during dispatch — reserved plumbing for the automatic compaction path.
+- Unknown `?foo=bar` keys are never consumed: the dispatcher forwards them to the command handler verbatim (so each command's own unknown-arg handling runs) and queues one warning naming the key, so a typo cannot silently no-op.
+- Values containing additional `=` are preserved (`?config=key=value` → `'key=value'`).
+- Override applies only to the current command; it does not affect global session state.
+- Custom commands and MCP prompts bypass override parsing (they receive `?foo=1` literally).
+- Add `nanocoder storage`, a read-only interactive inspector for saved sessions and artifacts across Nanocoder and timeline/checkpoint data in the current project. Use `nanocoder storage --format json` for a non-interactive report suitable for scripts.
+
+- Cap the Architect review bar's changed/new-file lists at 5 rows with a "+N more" line, matching the same cap already used for the live tool-count summary. It used to print every file with no limit, so on a turn touching many files the list pushed the Keep / Revert / Revert & Revise choices below the bottom of the screen. Closes #1533.
+- Pressing Enter on a fully typed slash command now runs it on the first press instead of needing a second Enter to dismiss the completion menu. The menu opens with the exact, unambiguous match already highlighted, and Enter used to "select" it - re-applying text that was already there and closing the menu - rather than submitting. Partly typed commands still complete on Enter as before. Closes #1431.
+- Keep `globalThis.process` intact when `fetch_url` or file caching converts HTML through get-md: pages with an `<iframe>` make happy-dom windows that null the global after get-md's own restore, and the next `process` read crashed the app through the fatal-error handler. The logging config, logger provider and shutdown manager now use a module-level `process` reference, the uncaught-exception and unhandled-rejection handlers fall back to stderr when the logger itself throws, and the conversion calls restore the global afterwards. Closes #1553.
+- Fix `loadAppConfig` stripping the `.source` field when unwrapping MCP server configs, which silently disabled `validateProjectConfigSecurity`'s hardcoded-credential scanner for project-level MCP servers. Closes #1248.
+- Ctrl+A, Ctrl+E, Ctrl+U and Ctrl+K in the prompt now act on the current line, not the whole multi-line buffer. Ctrl+U on the last line of a three-line prompt used to clear all three lines with no undo, and Ctrl+A/Ctrl+E jumped to the very start/end of the prompt instead of the current line, matching the `?` shortcuts legend's "Move/Delete to start or end of line" only when the prompt had a single line. Closes #1530.
+- Queued-message previews, the session label, the active-editor filename, and session titles no longer wrap onto extra rows when the text is CJK or contains emoji. The shared truncate helper budgeted in UTF-16 code units while its callers pass a column count, and a double-width CJK ideograph or emoji is one code unit but two terminal columns, so a "truncated" line could render at roughly twice its intended width. It now truncates by actual terminal column width via `cli-truncate`, so a queued message stays on a single row regardless of script. Closes #1531.
+- Fixed the UI sometimes not re-laying out after a terminal resize. Layout reactivity came from the clamped box width, so any resize that landed inside a clamp (below 44 or above 204 columns) produced no re-render and left the welcome screen, input box, status bar and session selector sized for the old terminal. Width now derives from a reactive raw column count. Closes #1328.
+- update test - mcp-client-spec.ts
+- Fixed `/stats` dropping arrow-key presses and freezing on a range tab. The range stepped from the value captured in the input handler's closure, but Ink re-registers that handler in a passive effect that runs after the frame is painted — so a press arriving before the effect landed was dispatched with the previous render's range, recomputed the tab it had already moved to, and wedged there until another key broke the tie. The range now steps from the value React holds.
+- Fixed the sub-agent transcript appending "..." to every tool result. The view sliced each result to 100 characters and added the ellipsis unconditionally, so a short result like `OK` rendered as `OK...` and implied output that was never truncated. The ellipsis now appears only when the content is actually past the limit, matching the guarded pattern in the git-commit tool card. Closes #1408.
+
+If there are any problems, feedback or thoughts please drop an issue or message us through Discord! Thank you for using Nanocoder.
+
 # 1.31.0
 
 - Added a first-class provider template for Cheaper Inference, an OpenAI-compatible gateway, to the `/settings providers` wizard. Selecting it fills in the base URL (`https://api.cheaperinference.com/v1`) so only an API key and a model name are needed, and the wizard can fetch the account's model list over the standard `/models` endpoint.
